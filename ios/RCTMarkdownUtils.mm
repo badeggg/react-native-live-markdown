@@ -3,6 +3,7 @@
 #import <React/RCTAssert.h>
 #import <React/RCTFont.h>
 #import <JavaScriptCore/JavaScriptCore.h>
+#import <Foundation/Foundation.h>
 
 @implementation RCTMarkdownUtils {
   NSString *_prevInputString;
@@ -37,6 +38,7 @@
 
         JSValue *result = [function callWithArguments:@[inputString]];
         NSArray *ranges = [result toArray];
+        NSLog(@"Content of ranges: %@", ranges);
 
         NSMutableAttributedString *attributedString = [[NSMutableAttributedString alloc] initWithString:inputString attributes:attributes];
         [attributedString beginEditing];
@@ -54,6 +56,7 @@
             NSInteger location = [[item valueForKey:@"start"] unsignedIntegerValue];
             NSInteger length = [[item valueForKey:@"length"] unsignedIntegerValue];
             NSInteger depth = [[item valueForKey:@"depth"] unsignedIntegerValue] ?: 1;
+            NSInteger leadingWhiteSpacesCountInFirstRangeLine = [[item valueForKey:@"leadingWhiteSpacesCountInFirstRangeLine"] unsignedIntegerValue] ?: 0;
             NSRange range = NSMakeRange(location, length);
 
             if ([type isEqualToString:@"bold"] || [type isEqualToString:@"italic"] || [type isEqualToString:@"code"] || [type isEqualToString:@"pre"] || [type isEqualToString:@"h1"] || [type isEqualToString:@"emoji"]) {
@@ -116,13 +119,22 @@
                 [attributedString addAttribute:NSForegroundColorAttributeName value:_markdownStyle.linkColor range:range];
             } else if ([type isEqualToString:@"blockquote"]) {
                 CGFloat indent = (_markdownStyle.blockquoteMarginLeft + _markdownStyle.blockquoteBorderWidth + _markdownStyle.blockquotePaddingLeft) * depth;
-                NSMutableParagraphStyle *paragraphStyle = [NSMutableParagraphStyle new];
-                paragraphStyle.firstLineHeadIndent = indent;
-                paragraphStyle.headIndent = indent;
-                [attributedString addAttribute:NSParagraphStyleAttributeName value:paragraphStyle range:range];
+                NSLog(@"indent: %f", indent);
+                if (leadingWhiteSpacesCountInFirstRangeLine == 0) {
+                    NSMutableParagraphStyle *paragraphStyle = [NSMutableParagraphStyle new];
+                    paragraphStyle.firstLineHeadIndent = indent;
+                    paragraphStyle.headIndent = indent;
+                    [attributedString addAttribute:NSParagraphStyleAttributeName value:paragraphStyle range:range];
+                } else {
+                    CGFloat kerningValue = indent;
+                    NSRange targetRange = NSMakeRange(location - 1, 1);
+                    [attributedString addAttribute:NSKernAttributeName value:@(kerningValue) range:targetRange];
+                }
+                
                 [_blockquoteRangesAndLevels addObject:@{
                     @"range": [NSValue valueWithRange:range],
-                    @"depth": @(depth)
+                    @"depth": @(depth),
+                    @"leadingWhiteSpacesCountInFirstRangeLine": @(leadingWhiteSpacesCountInFirstRangeLine)
                 }];
             } else if ([type isEqualToString:@"pre"]) {
                 [attributedString addAttribute:NSForegroundColorAttributeName value:_markdownStyle.preColor range:range];
